@@ -152,9 +152,16 @@ class Agent:
             gamma      (float) : Discount factor
             lr         (float) : Learning rate
         '''
-        # TODO: Initialize any important fields, including your weight matrix.
+        # Initialize any important fields, including your weight matrix.
         #       Remember to fold in a bias!
         # self.W = ...
+        self.state_space = state_space
+        self.action_space = action_space
+        self.epsilon = epsilon
+        self.gamma = gamma
+        self.lr = lr
+        self.W = np.zeros((self.state_space+1, self.action_space))
+
 
     @round_output(5) # DON'T DELETE THIS LINE
     def Q(self, state : np.ndarray, 
@@ -180,8 +187,10 @@ class Agent:
             Otherwise, returns array of Q-values for all actions from state,
             [Q(state, a_0), Q(state, a_1), Q(state, a_2)...] for all a_i.
         '''
-        # TODO: Implement this!
-        raise NotImplementedError
+        # Implement this!
+        q = self.W.T @ np.append(state, 1)
+        return q if action is None else q[action]
+        
 
     def get_action(self, state: np.ndarray) -> int:
         '''
@@ -194,9 +203,12 @@ class Agent:
             Returns int a denoting the action the agent should take according to
             the epsilon-greedy strategy.
         '''
-        # TODO: Select an action based on the state via the epsilon-greedy 
+        # Select an action based on the state via the epsilon-greedy 
         #       strategy.
-        raise NotImplementedError
+        q = self.Q(state=state)
+        optimal_action = int(np.argmax(q))
+        pick_randomly = np.random.rand() < self.epsilon
+        return np.random.randint(0, self.action_space) if pick_randomly else optimal_action
     
     def update(self, state: np.ndarray, action: int, reward: float, 
                      state_new: np.ndarray) -> None:
@@ -209,8 +221,12 @@ class Agent:
             reward         (float): Reward received.
             state_new (np.ndarray): New state encoded as vector with shape (state_space,).
         '''
-        # TODO: Update the agent's parameters.
-        raise NotImplementedError
+        # Update the agent's parameters.
+        best_q = np.max([self.Q(state_new, a) for a in range(self.action_space)]) # type: ignore
+        target = reward + self.gamma * best_q
+        current_q = self.Q(state, action)
+        td_err = current_q - target
+        self.W[:, action] -= self.lr * td_err * np.append(state, 1.0)
 
 
 class ExperienceReplay:
