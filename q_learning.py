@@ -188,7 +188,7 @@ class Agent:
             [Q(state, a_0), Q(state, a_1), Q(state, a_2)...] for all a_i.
         '''
         # Implement this!
-        q = self.W.T @ np.append(state, 1)
+        q = self.W.T @ np.insert(state, 0, 1)
         return q if action is None else q[action]
         
 
@@ -207,8 +207,8 @@ class Agent:
         #       strategy.
         q = self.Q(state=state)
         optimal_action = int(np.argmax(q))
-        pick_randomly = np.random.rand() < self.epsilon
-        return np.random.randint(0, self.action_space) if pick_randomly else optimal_action
+        pick_randomly = random.random() < self.epsilon
+        return random.randint(0, self.action_space - 1) if pick_randomly else optimal_action
     
     def update(self, state: np.ndarray, action: int, reward: float, 
                      state_new: np.ndarray) -> None:
@@ -226,7 +226,7 @@ class Agent:
         target = reward + self.gamma * best_q
         current_q = self.Q(state, action)
         td_err = current_q - target
-        self.W[:, action] -= self.lr * td_err * np.append(state, 1.0)
+        self.W[:, action] -= self.lr * td_err * np.insert(state, 0, 1.0)
 
 
 class ExperienceReplay:
@@ -237,7 +237,7 @@ class ExperienceReplay:
             buffer_size (int) : Maximum size of the replay buffer
         '''
         # TODO: initialize the replay buffer with the correct size (Hint: use a deque)
-        
+        self.buffer = deque([], buffer_size)
     
     def add(self, state, action, reward, next_state):
         '''
@@ -249,7 +249,7 @@ class ExperienceReplay:
             next_state  (np.ndarray): Next state encoded as vector with shape (state_space,).
         '''
         # TODO: append the experience to the replay buffer
-        raise NotImplementedError
+        self.buffer.append((state, action, reward, next_state))
     
     def sample(self, batch_size):
         '''
@@ -263,7 +263,9 @@ class ExperienceReplay:
 
         # TODO: return a randomly sampled batch of experiences, only if there
         #       are enough experiences in the buffer
-        raise NotImplementedError
+        if len(self.buffer) < batch_size:
+            return []
+        return random.sample(self.buffer, batch_size)
 
 
 if __name__ == "__main__":
@@ -276,26 +278,34 @@ if __name__ == "__main__":
 
     # Create environment
     if env_type == "mc":
-        env = None # TODO: Replace me!
+        env = MountainCar(mode, False)
     elif env_type == "gw":
-        env = None # TODO: Replace me!
+        env = GridWorld(mode, True)
     else: 
         raise Exception(f"Invalid environment type {env_type}")
 
     # TODO: Initialize your agent and optionally, your replay buffer
-    # agent = ...
+    agent = Agent(env.state_space, env.action_space, epsilon, gamma, lr)
+    returns = []
+    experience_buffer = ExperienceReplay(buffer_size)
 
     for episode in range(episodes):
 
-        # TODO: Get the initial state by calling env.reset()
+        # Get the initial state by calling env.reset()
+        original_state = env.reset()
+        episode_return = 0
 
         for iteration in range(max_iterations):
 
             # TODO: Select an action based on the state via the epsilon-greedy 
             #       strategy.
+            action = agent.get_action(original_state)
 
             # TODO: Take a step in the environment with this action, and get the 
             #       returned next state, reward, and done flag.
+            next_state, reward, done = env.step(action=action)
+            experience_buffer.add(original_state, action, reward, next_state)
+            episode_return += reward
 
             # TODO: If experience replay is disabled, use the original state,the
             #       action, the next state, and the reward to update the 
@@ -303,14 +313,21 @@ if __name__ == "__main__":
             #       If experience replay is enabled, sample experiences from the
             #       replay buffer to perform the update instead!
             if (replay_enabled == 1):
-                pass
+                for experience in experience_buffer.sample(batch_size):
+                    agent.update(*experience)
             else:
-                pass
+                agent.update(original_state, action, reward, next_state)
 
             # TODO: Remember to break out of this inner loop if the environment 
             #       signals done!
+            if done:
+                break
             
-            pass
+            original_state = next_state
+
+        returns.append(episode_return)
     
     # TODO: Save your weights and returns. The reference solution uses 
     # np.savetxt(..., fmt="%.18e", delimiter=" ")
+    np.savetxt(weight_out, agent.W.T, fmt="%.18e", delimiter=" ")
+    np.savetxt(returns_out, np.array(returns), fmt="%.18e", delimiter=" ")
